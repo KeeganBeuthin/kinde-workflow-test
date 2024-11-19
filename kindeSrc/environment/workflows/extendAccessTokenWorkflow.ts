@@ -9,67 +9,42 @@ export const workflowSettings: WorkflowSettings = {
     "kinde.accessToken": {},
     "kinde.fetch": {},
     "url": {},
-    "kinde.env": {
-      variables: [
-        "IP_INFO_TOKEN",
-        "KINDE_M2M_CLIENT_ID",
-        "KINDE_M2M_CLIENT_SECRET"
-      ]
-    }
+    "kinde.env": {}
   }
 };
 
 export default {
   async handle(event: onUserTokenGeneratedEvent) {
-    console.log('Infrastructure version', version);
-    
-    const kindeAPI = await createKindeAPI(event, {
-      clientId: getEnvironmentVariable('KINDE_M2M_CLIENT_ID')?.value,
-      clientSecret: getEnvironmentVariable('KINDE_M2M_CLIENT_SECRET')?.value
-    });
-
+    console.log('Infrestructure version', version)
     const excludedPermissions = ['payments:create'];
+    
     const orgCode = event.context.organization.code;
     const userId = event.context.user.id;
 
-    console.log('Event context:', event);
+    console.log(event)
     
-    const ipInfoToken = getEnvironmentVariable('IP_INFO_TOKEN')?.value;
-    if (!ipInfoToken) {
-      console.error('IP_INFO_TOKEN not set');
-    }
-
-    const { data: ipDetails } = await fetch(
-      `https://ipinfo.io/${event.request.ip}?token=${ipInfoToken}`, 
-      {
-        method: "GET",
-        responseFormat: 'json',
-        headers: {
-          "Content-Type": "application/json",
-        }
+    const kindeAPI = await createKindeAPI(event);
+    const ipInfoToken = getEnvironmentVariable('IP_INFO_TOKEN')?.value
+    const { data: ipDetails } = await fetch(`https://ipinfo.io/${event.request.ip}?token=${ipInfoToken}`, {
+      method: "GET",
+      responseFormat: 'json',
+      headers: {
+        "Content-Type": "application/json",
       }
-    );
+    });
 
-    console.log('IP Details:', ipDetails);
+    console.log(ipDetails)
     
     const { data: res } = await kindeAPI.get(
       `organizations/${orgCode}/users/${userId}/permissions`
     );
 
-    console.log('Permissions response:', res);
+    console.log('res', res);
 
-    const accessToken = accessTokenCustomClaims<{
-      hello: string;
-      settings: string;
-      permissions: any[];
-      timezone: string;
-    }>();
-
+    const accessToken = accessTokenCustomClaims<{ hello: string; settings: string; permissions: [], timezone: string;}>();
     accessToken.hello = "Hello there how are you?!";
-    accessToken.settings = settings.output;
-    accessToken.permissions = res.permissions.filter(
-      (p) => !excludedPermissions.includes(p.key)
-    );
+    accessToken.settings = settings.output
+    accessToken.permissions =  res.permissions.filter((p) => !excludedPermissions.includes(p.key))
     accessToken.timezone = ipDetails.timezone;
   }
 }
