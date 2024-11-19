@@ -1,4 +1,4 @@
-import { onUserTokenGeneratedEvent,version, createKindeAPI, getEnvironmentVariable, accessTokenCustomClaims, WorkflowSettings, WorkflowTrigger, denyAccess, fetch } from "@kinde/infrastructure"
+import { onUserTokenGeneratedEvent, version, createKindeAPI, accessTokenCustomClaims, WorkflowSettings, WorkflowTrigger } from "@kinde/infrastructure"
 import { settings } from "../../../utils/utils";
 
 export const workflowSettings: WorkflowSettings = {
@@ -9,13 +9,15 @@ export const workflowSettings: WorkflowSettings = {
     "kinde.accessToken": {},
     "kinde.fetch": {},
     "url": {},
-    "kinde.env": {}
+    "kinde.env": {
+      scopes: ["read:organization_user_permissions"]
+    }
   }
 };
 
 export default {
   async handle(event: onUserTokenGeneratedEvent) {
-    console.log('Infrestructure version', version)
+    console.log('Infrastructure version', version)
     const excludedPermissions = ['payments:create'];
     
     const orgCode = event.context.organization.code;
@@ -24,27 +26,25 @@ export default {
     console.log(event)
     
     const kindeAPI = await createKindeAPI(event);
-    const ipInfoToken = getEnvironmentVariable('IP_INFO_TOKEN')?.value
-    const { data: ipDetails } = await fetch(`https://ipinfo.io/${event.request.ip}?token=${ipInfoToken}`, {
-      method: "GET",
-      responseFormat: 'json',
-      headers: {
-        "Content-Type": "application/json",
-      }
-    });
-
-    console.log(ipDetails)
     
-    const { data: res } = await kindeAPI.get(
-      `organizations/${orgCode}/users/${userId}/permissions`
-    );
+    let permissions = [];
+    try {
+      const { data: res } = await kindeAPI.get(
+        `organizations/${orgCode}/users/${userId}/permissions`
+      );
+      permissions = (res?.permissions || []).filter((p) => !excludedPermissions.includes(p.key));
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+    }
 
-    console.log('res', res);
-
-    const accessToken = accessTokenCustomClaims<{ hello: string; settings: string; permissions: [], timezone: string;}>();
+    const accessToken = accessTokenCustomClaims<{ 
+      hello: string; 
+      settings: string; 
+      permissions: any[];
+    }>();
+    
     accessToken.hello = "Hello there how are you?!";
-    accessToken.settings = settings.output
-    accessToken.permissions =  res.permissions.filter((p) => !excludedPermissions.includes(p.key))
-    accessToken.timezone = ipDetails.timezone;
+    accessToken.settings = settings.output;
+    accessToken.permissions = permissions;
   }
 }
